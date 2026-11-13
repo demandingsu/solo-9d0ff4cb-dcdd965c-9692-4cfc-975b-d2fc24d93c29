@@ -6,9 +6,18 @@ services:
     ports:
       - "5001:5001"
 
-  # 末班核定 Web 应用：浏览器访问 http://localhost:8000/
-  # 容器内通过服务名 example-site 访问示例网站，首页 URL 填：
-  #   http://example-site:5001/
+  # 本地示例运营门户（免登录）：浏览器访问 http://localhost:5002/
+  # 演示控制台：http://localhost:5002/demo（并发改表 / 保存后响应中断 / 重置）
+  portal:
+    build: ./portal
+    container_name: shuttle-portal
+    ports:
+      - "5002:5002"
+
+  # 末班核定 + 勘误回填 Web 应用：浏览器访问 http://localhost:8000/
+  # 容器内通过服务名访问示例网站与门户，URL 分别填：
+  #   http://example-site:5001/   （末班核定）
+  #   http://portal:5002/         （勘误回填）
   commuter:
     build: ./app
     container_name: shuttle-commuter
@@ -16,3 +25,4 @@ services:
       - "8000:5000"
     depends_on:
       - example-site
+      - portal

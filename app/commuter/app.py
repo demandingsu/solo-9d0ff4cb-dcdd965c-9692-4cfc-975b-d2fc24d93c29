@@ -7,10 +7,17 @@ from datetime import datetime
 import requests
 from flask import Flask, render_template, request
 
+from .backfill import parse_corrections, run_backfill
 from .scraper import find_station_url, scrape_station_timetable
 from .times import SERVICE_LABELS, determine_last_trip
 
 app = Flask(__name__)
+
+# 回填页勘误表预填样例（与示例门户 portal/ 的初始数据对应）
+DEFAULT_CORRECTIONS = """# 每行：站名,车次号,服务日类型,原时刻,新时刻
+滨河园区,N201,工作日,22:30,22:35
+中央厂区,N202,每日,24:25,24:30
+夜班宿舍,N204,周末,01:30,01:35"""
 
 
 def _parse_local_dt(raw: str, field_label: str) -> datetime:
@@ -114,6 +121,36 @@ def index():
         board_source=board_source,
         alight_source=alight_source,
         service_labels=SERVICE_LABELS,
+        now=datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )
+
+
+@app.route("/backfill", methods=["GET", "POST"])
+def backfill():
+    form = {"portal_url": "", "corrections": DEFAULT_CORRECTIONS}
+    if request.method != "POST":
+        return render_template("backfill.html", form=form, now=datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+    form["portal_url"] = request.form.get("portal_url", "").strip()
+    form["corrections"] = request.form.get("corrections", "")
+    errors: list[str] = []
+    report = None
+
+    if not form["portal_url"]:
+        errors.append("请填写门户 URL。")
+    corrections, parse_errors = parse_corrections(form["corrections"])
+    errors.extend(parse_errors)
+    if not corrections and not parse_errors:
+        errors.append("勘误表为空，请至少填写一行有效勘误。")
+
+    if not errors:
+        report = run_backfill(form["portal_url"], corrections)
+
+    return render_template(
+        "backfill.html",
+        form=form,
+        errors=errors,
+        report=report,
         now=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
 

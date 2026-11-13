@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>接驳时刻勘误回填</title>
+  <style>
+    :root { --ink:#1f2933; --muted:#667085; --brand:#1d4ed8; --ok-bg:#ecfdf3;
+            --ok-bd:#12b76a; --warn-bg:#fffaeb; --warn-bd:#f79009;
+            --err-bg:#fef3f2; --err-bd:#f04438; --gray-bg:#f2f4f7; --gray-bd:#98a2b3; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",
+           system-ui, sans-serif; color:var(--ink); background:#f5f7fb; }
+    header { background:var(--brand); color:#fff; padding:20px 28px; }
+    header h1 { margin:0; font-size:20px; }
+    header p { margin:6px 0 0; font-size:13px; opacity:.85; }
+    main { max-width:1080px; margin:24px auto; padding:0 16px; }
+    .card { background:#fff; border:1px solid #e4e7ec; border-radius:10px;
+            padding:20px 24px; margin-bottom:20px; }
+    label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+    input[type=url] { width:100%; padding:9px 10px; border:1px solid #d0d5dd;
+                      border-radius:8px; font-size:14px; }
+    textarea { width:100%; padding:9px 10px; border:1px solid #d0d5dd; border-radius:8px;
+               font-family:ui-monospace,Consolas,monospace; font-size:13px; }
+    input:focus, textarea:focus { outline:2px solid #b2ccff; border-color:var(--brand); }
+    .field { margin-bottom:14px; }
+    button { margin-top:6px; background:var(--brand); color:#fff; border:0;
+             padding:10px 26px; border-radius:8px; font-size:15px; cursor:pointer; }
+    button:hover { background:#1e40af; }
+    .banner { border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:14px;
+              border:1px solid; }
+    .banner.err { background:var(--err-bg); border-color:var(--err-bd); }
+    .banner.ok { background:var(--ok-bg); border-color:var(--ok-bd); }
+    .banner.warn { background:var(--warn-bg); border-color:var(--warn-bd); }
+    .banner ul { margin:6px 0 0 18px; padding:0; }
+    table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    th, td { border:1px solid #e4e7ec; padding:7px 9px; text-align:left; vertical-align:top; }
+    th { background:#f9fafb; }
+    code { background:#f2f4f7; padding:1px 6px; border-radius:4px; font-size:12px; }
+    .muted { color:var(--muted); font-size:12px; }
+    h2 { font-size:16px; margin:0 0 10px; }
+    a { color:var(--brand); word-break:break-all; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px;
+             font-weight:600; border:1px solid; white-space:nowrap; }
+    .badge.done { background:var(--ok-bg); border-color:var(--ok-bd); }
+    .badge.undone { background:var(--warn-bg); border-color:var(--warn-bd); }
+    .badge.conflict { background:var(--err-bg); border-color:var(--err-bd); }
+    .badge.unknown { background:var(--gray-bg); border-color:var(--gray-bd); }
+    .nav { margin-bottom:16px; font-size:14px; }
+    ul.log { margin:6px 0 0 18px; padding:0; font-size:13px; }
+    ul.log li { margin:3px 0; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>接驳时刻勘误回填</h1>
+  <p>把核准的时刻勘误写回运营门户：沿分页读取编辑表单，逐行核对后整页提交，提交后回读核验。</p>
+</header>
+<main>
+  <p class="nav">← <a href="/">夜班接驳车末班核定</a></p>
+
+  {% if errors %}
+  <div class="banner err">
+    <strong>⚠ 无法执行回填</strong>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" novalidate>
+      <div class="field">
+        <label for="portal_url">门户 URL</label>
+        <input id="portal_url" name="portal_url" type="url" required
+               placeholder="例如 http://portal:5002/" value="{{ form.portal_url }}">
+        <p class="muted">门户首页或任一编辑页地址；容器内访问示例门户请填 <code>http://portal:5002/</code>。</p>
+      </div>
+      <div class="field">
+        <label for="corrections">勘误表（每行一条：站名,车次号,服务日类型,原时刻,新时刻）</label>
+        <textarea id="corrections" name="corrections" rows="8" required>{{ form.corrections }}</textarea>
+        <p class="muted">支持中英文逗号；<code>#</code> 开头为注释；服务日类型填 工作日 / 周末 / 每日；时刻支持 24:xx 跨日写法。</p>
+      </div>
+      <button type="submit">执行回填</button>
+    </form>
+  </div>
+
+  {% if report %}
+  <div class="card">
+    {% if report.errors %}
+    <div class="banner err">
+      <strong>回填中止或核验不完整</strong>
+      <ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+    {% elif report.verified %}
+    <div class="banner ok"><strong>回填流程结束，已回读门户逐项核验。</strong></div>
+    {% endif %}
+
+    <h2>逐项结果</h2>
+    <table>
+      <tr><th>#</th><th>站名</th><th>车次号</th><th>服务日</th><th>原时刻</th><th>新时刻</th>
+          <th>状态</th><th>门户现值</th><th>来源页</th><th>过程记录</th></tr>
+      {% for item in report.items %}
+      {% set c = item.correction %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ c.station }}</td>
+        <td>{{ c.trip_no }}</td>
+        <td>{{ c.service_kind }}</td>
+        <td><code>{{ c.old_clock }}</code></td>
+        <td><code>{{ c.new_clock }}</code></td>
+        <td>
+          {% if item.status == '确认完成' %}<span class="badge done">确认完成</span>
+          {% elif item.status == '未完成' %}<span class="badge undone">未完成</span>
+          {% elif item.status == '冲突' %}<span class="badge conflict">冲突</span>
+          {% else %}<span class="badge unknown">待核实</span>{% endif %}
+        </td>
+        <td>{% if item.current_clock %}<code>{{ item.current_clock }}</code>{% else %}—{% endif %}</td>
+        <td>{% if item.source_page %}<a href="{{ item.source_page }}" target="_blank">{{ item.source_page }}</a>{% else %}—{% endif %}</td>
+        <td>{% for note in item.notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+
+    {% if report.submit_log %}
+    <h2 style="margin-top:18px">页面提交记录</h2>
+    <ul class="log">
+      {% for line in report.submit_log %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if report.pages %}
+    <h2 style="margin-top:18px">读取到的编辑页</h2>
+    <ul class="log">
+      {% for url in report.pages %}<li><a href="{{ url }}" target="_blank">{{ url }}</a></li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <p class="muted">页面生成时间：{{ now }}</p>
+</main>
+</body>
+</html>
